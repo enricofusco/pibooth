@@ -4,35 +4,16 @@
 """
 
 import traceback
-from pibooth.utils import LOGGER, BlockConsoleHandler
+import pluggy
+from pibooth.states import hookspecs
+from pibooth.utils import LOGGER, BlockConsoleHandler, PoolingTimer
 
 
 class State(object):
 
-    app = None
-
-    def __init__(self, name):
+    def __init__(self, name, timeout=0):
         self.name = name
-
-    def entry_actions(self):
-        """Perform actions when state is activated
-        """
-        pass
-
-    def do_actions(self, events):
-        """Perform periodic actions related to the state
-        """
-        pass
-
-    def exit_actions(self):
-        """Perform actions before state is deactivated
-        """
-        pass
-
-    def validate_transition(self, events):
-        """Return the name of the next state if can be activated
-        """
-        pass
+        self.timer = PoolingTimer(timeout)
 
 
 class StateMachine(object):
@@ -43,23 +24,32 @@ class StateMachine(object):
         self.active_state = None
 
         # Share the application to manage between states
-        State.app = application
+        self.app = application
+
+        self.pm = pluggy.PluginManager(hookspecs.hookspec.project_name)
+        self.pm.add_hookspecs(hookspecs)
+        self.pm.load_setuptools_entrypoints(hookspecs.hookspec.project_name)
+        self.pm.check_pending()
 
     def add_state(self, state):
         """Add a state to the internal dictionary.
         """
         self.states[state.name] = state
+        self.pm.register(state)
 
     def add_failsafe_state(self, state):
         """Add a state that will be call in case of exception.
         """
         self.failsafe_state = state
         self.states[state.name] = state
+        self.pm.register(state)
 
     def remove_state(self, state_name):
         """Remove a state to the internal dictionary.
         """
         state = self.states.pop(state_name, None)
+        if self.pm.is_registered(state):
+            self.pm.unregister(state)
         if state == self.failsafe_state:
             self.failsafe_state = None
 
@@ -72,10 +62,12 @@ class StateMachine(object):
 
         try:
             # Perform the actions of the active state
-            self.active_state.do_actions(events)
+            hook = getattr(self.pm.hook, 'state_{}_do'.format(self.active_state.name))
+            hook(config=self.app.config, app=self.app, events=events)
 
             # Check conditions to activate the next state
-            new_state_name = self.active_state.validate_transition(events)
+            hook = getattr(self.pm.hook, 'state_{}_validate'.format(self.active_state.name))
+            new_state_name = hook(config=self.app.config, app=self.app, events=events)
         except Exception as ex:
             if self.failsafe_state and self.active_state != self.failsafe_state:
                 LOGGER.error(str(ex))
@@ -94,7 +86,8 @@ class StateMachine(object):
         try:
             # Perform any exit actions of the current state
             if self.active_state is not None:
-                self.active_state.exit_actions()
+                hook = getattr(self.pm.hook, 'state_{}_exit'.format(self.active_state.name))
+                hook(config=self.app.config, app=self.app)
         except Exception as ex:
             if self.failsafe_state and self.active_state != self.failsafe_state:
                 LOGGER.error(str(ex))
@@ -112,7 +105,8 @@ class StateMachine(object):
         self.active_state = self.states[state_name]
 
         try:
-            self.active_state.entry_actions()
+            hook = getattr(self.pm.hook, 'state_{}_enter'.format(self.active_state.name))
+            hook(config=self.app.config, app=self.app)
         except Exception as ex:
             if self.failsafe_state and self.active_state != self.failsafe_state:
                 LOGGER.error(str(ex))
