@@ -18,13 +18,14 @@ class State(object):
 
 class StateMachine(object):
 
-    def __init__(self, application):
+    def __init__(self, configuration, application):
         self.states = {}
         self.failsafe_state = None
         self.active_state = None
 
         # Share the application to manage between states
         self.app = application
+        self.cfg = configuration
 
         self.pm = pluggy.PluginManager(hookspecs.hookspec.project_name)
         self.pm.add_hookspecs(hookspecs)
@@ -63,11 +64,11 @@ class StateMachine(object):
         try:
             # Perform the actions of the active state
             hook = getattr(self.pm.hook, 'state_{}_do'.format(self.active_state.name))
-            hook(config=self.app.config, app=self.app, events=events)
+            hook(cfg=self.cfg, app=self.app, events=events)
 
             # Check conditions to activate the next state
             hook = getattr(self.pm.hook, 'state_{}_validate'.format(self.active_state.name))
-            new_state_name = hook(config=self.app.config, app=self.app, events=events)
+            new_state_name = hook(cfg=self.cfg, app=self.app, events=events)
         except Exception as ex:
             if self.failsafe_state and self.active_state != self.failsafe_state:
                 LOGGER.error(str(ex))
@@ -87,7 +88,8 @@ class StateMachine(object):
             # Perform any exit actions of the current state
             if self.active_state is not None:
                 hook = getattr(self.pm.hook, 'state_{}_exit'.format(self.active_state.name))
-                hook(config=self.app.config, app=self.app)
+                hook(cfg=self.cfg, app=self.app)
+
         except Exception as ex:
             if self.failsafe_state and self.active_state != self.failsafe_state:
                 LOGGER.error(str(ex))
@@ -106,7 +108,7 @@ class StateMachine(object):
 
         try:
             hook = getattr(self.pm.hook, 'state_{}_enter'.format(self.active_state.name))
-            hook(config=self.app.config, app=self.app)
+            hook(cfg=self.cfg, app=self.app)
         except Exception as ex:
             if self.failsafe_state and self.active_state != self.failsafe_state:
                 LOGGER.error(str(ex))

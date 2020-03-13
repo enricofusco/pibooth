@@ -13,7 +13,7 @@ class StatePrint(State):
         self.printed = False
 
     @pibooth.hookimpl
-    def state_print_enter(self, app):
+    def state_print_enter(self, cfg, app):
         self.printed = False
 
         with timeit("Display the final picture"):
@@ -22,17 +22,17 @@ class StatePrint(State):
 
         app.led_print.blink()
         # Reset timeout in case of settings changed
-        self.timer.timeout = app.config.getfloat('PRINTER', 'printer_delay')
+        self.timer.timeout = cfg.getfloat('PRINTER', 'printer_delay')
         self.timer.start()
 
     @pibooth.hookimpl
-    def state_print_do(self, config, app, events):
+    def state_print_do(self, cfg, app, events):
         if app.find_print_event(events) and app.previous_picture_file:
 
             with timeit("Send final picture to printer"):
                 app.led_print.switch_on()
                 app.printer.print_file(app.previous_picture_file,
-                                       config.getint('PRINTER', 'pictures_per_page'))
+                                       cfg.getint('PRINTER', 'pictures_per_page'))
 
             time.sleep(1)  # Just to let the LED switched on
             app.nbr_duplicates += 1

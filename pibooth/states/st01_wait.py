@@ -14,30 +14,30 @@ class StateWait(State):
         self.final_display_timer = None
 
     @pibooth.hookimpl
-    def state_wait_enter(self, config, app):
-        if config.getfloat('WINDOW', 'final_image_delay') < 0:
+    def state_wait_enter(self, cfg, app):
+        if cfg.getfloat('WINDOW', 'final_image_delay') < 0:
             self.final_display_timer = None
         else:
-            self.final_display_timer = PoolingTimer(config.getfloat('WINDOW', 'final_image_delay'))
+            self.final_display_timer = PoolingTimer(cfg.getfloat('WINDOW', 'final_image_delay'))
 
         animated = app.makers_pool.get()
-        if config.getfloat('WINDOW', 'final_image_delay') < 0:
+        if cfg.getfloat('WINDOW', 'final_image_delay') < 0:
             self.final_display_timer = None
         else:
-            self.final_display_timer = PoolingTimer(config.getfloat('WINDOW', 'final_image_delay'))
+            self.final_display_timer = PoolingTimer(cfg.getfloat('WINDOW', 'final_image_delay'))
 
         if self.final_display_timer and self.final_display_timer.is_timeout():
             previous_picture = None
-        elif app.config.getboolean('WINDOW', 'animate') and animated:
+        elif cfg.getboolean('WINDOW', 'animate') and animated:
             app.previous_animated = itertools.cycle(animated)
             previous_picture = next(app.previous_animated)
-            self.timer.timeout = config.getfloat('WINDOW', 'animate_delay')
+            self.timer.timeout = cfg.getfloat('WINDOW', 'animate_delay')
             self.timer.start()
         else:
             previous_picture = app.previous_picture
 
         app.window.show_intro(previous_picture, app.printer.is_installed() and
-                              app.nbr_duplicates < config.getint('PRINTER', 'max_duplicates') and
+                              app.nbr_duplicates < cfg.getint('PRINTER', 'max_duplicates') and
                               not app.printer_unavailable)
         app.window.set_print_number(len(app.printer.get_all_tasks()), app.printer_unavailable)
 
@@ -46,11 +46,11 @@ class StateWait(State):
             app.led_print.blink()
 
     @pibooth.hookimpl
-    def state_wait_do(self, config, app, events):
-        if config.getboolean('WINDOW', 'animate') and app.previous_animated and self.timer.is_timeout():
+    def state_wait_do(self, cfg, app, events):
+        if cfg.getboolean('WINDOW', 'animate') and app.previous_animated and self.timer.is_timeout():
             previous_picture = next(app.previous_animated)
             app.window.show_intro(previous_picture, app.printer.is_installed() and
-                                  app.nbr_duplicates < config.getint('PRINTER', 'max_duplicates') and
+                                  app.nbr_duplicates < cfg.getint('PRINTER', 'max_duplicates') and
                                   not app.printer_unavailable)
             self.timer.start()
         else:
@@ -59,25 +59,25 @@ class StateWait(State):
         if app.find_print_event(events) and app.previous_picture_file and app.printer.is_installed()\
                 and not (self.final_display_timer and self.final_display_timer.is_timeout()):
 
-            if app.nbr_duplicates >= app.config.getint('PRINTER', 'max_duplicates'):
+            if app.nbr_duplicates >= cfg.getint('PRINTER', 'max_duplicates'):
                 LOGGER.warning("Too many duplicates sent to the printer (%s max)",
-                               config.getint('PRINTER', 'max_duplicates'))
+                               cfg.getint('PRINTER', 'max_duplicates'))
                 return
 
             elif app.printer_unavailable:
                 LOGGER.warning("Maximum number of printed pages reached (%s/%s max)", app.printer.nbr_printed,
-                               config.getint('PRINTER', 'max_pages'))
+                               cfg.getint('PRINTER', 'max_pages'))
                 return
 
             with timeit("Send final picture to printer"):
                 app.led_print.switch_on()
                 app.printer.print_file(app.previous_picture_file,
-                                       config.getint('PRINTER', 'pictures_per_page'))
+                                       cfg.getint('PRINTER', 'pictures_per_page'))
 
             time.sleep(1)  # Just to let the LED switched on
             app.nbr_duplicates += 1
 
-            if app.nbr_duplicates >= config.getint('PRINTER', 'max_duplicates') or app.printer_unavailable:
+            if app.nbr_duplicates >= cfg.getint('PRINTER', 'max_duplicates') or app.printer_unavailable:
                 app.window.show_intro(previous_picture, False)
                 app.led_print.switch_off()
             else:

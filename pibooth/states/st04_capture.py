@@ -30,21 +30,21 @@ class StateCapture(State):
         app.camera.preview(app.window)
 
     @pibooth.hookimpl
-    def state_capture_do(self, config, app):
+    def state_capture_do(self, cfg, app):
         app.window.set_capture_number(self.count + 1, app.capture_nbr)
         pygame.event.pump()
 
-        if config.getboolean('WINDOW', 'preview_countdown'):
-            app.camera.preview_countdown(config.getint('WINDOW', 'preview_delay'))
+        if cfg.getboolean('WINDOW', 'preview_countdown'):
+            app.camera.preview_countdown(cfg.getint('WINDOW', 'preview_delay'))
         else:
-            app.camera.preview_wait(config.getint('WINDOW', 'preview_delay'))
+            app.camera.preview_wait(cfg.getint('WINDOW', 'preview_delay'))
 
         capture_path = osp.join(app.dirname, "pibooth{:03}.jpg".format(self.count))
 
-        if config.getboolean('WINDOW', 'preview_stop_on_capture'):
+        if cfg.getboolean('WINDOW', 'preview_stop_on_capture'):
             app.camera.stop_preview()
 
-        effects = config.gettyped('PICTURE', 'captures_effects')
+        effects = cfg.gettyped('PICTURE', 'captures_effects')
         if not isinstance(effects, (list, tuple)):
             # Same effect for all captures
             effect = effects
@@ -57,7 +57,7 @@ class StateCapture(State):
                 app.capture_nbr, effects))
 
         with timeit("Take a capture and save it in {}".format(capture_path)):
-            if config.getboolean('WINDOW', 'flash'):
+            if cfg.getboolean('WINDOW', 'flash'):
                 with app.window.flash(2):
                     app.camera.capture(capture_path, effect)
             else:
@@ -65,7 +65,7 @@ class StateCapture(State):
 
         self.count += 1
 
-        if config.getboolean('WINDOW', 'preview_stop_on_capture') and self.count < app.capture_nbr:
+        if cfg.getboolean('WINDOW', 'preview_stop_on_capture') and self.count < app.capture_nbr:
             # Restart preview only if other captures needed
             app.camera.preview(app.window)
 
